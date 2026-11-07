@@ -5,174 +5,103 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>James's Chore Challenge</title>
   <style>
-    :root {
-      color-scheme: light;
-      --navy: #173d59;
-      --ink: #193447;
-      --muted: #526b7a;
-      --page: #eef4f7;
-      --green: #178066;
-    }
-
+    /* Baseline styles deliberately avoid CSS variables, grid and clamp()
+       so older iPad WebKit can render the page correctly. */
     * { box-sizing: border-box; }
-
     body {
       margin: 0;
-      padding: clamp(14px, 3vw, 36px);
-      background: var(--page);
-      color: var(--ink);
-      font: 16px/1.5 system-ui, -apple-system, sans-serif;
+      padding: 24px;
+      background: #eef4f7;
+      color: #193447;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
       -webkit-text-size-adjust: 100%;
     }
-
-    main {
-      width: min(100%, 1180px);
-      margin: 0 auto;
-    }
-
+    main { width: 100%; max-width: 1120px; margin: 0 auto; }
     header {
-      padding: clamp(22px, 3.5vw, 38px);
-      border-radius: 20px;
-      background: var(--navy);
-      color: white;
+      padding: 30px;
+      border-radius: 18px;
+      background: #173d59;
+      color: #ffffff;
     }
-
-    h1 {
-      margin: 0 0 8px;
-      font-size: clamp(1.6rem, 3vw, 2.35rem);
-      line-height: 1.2;
-      letter-spacing: -0.025em;
-    }
-
-    header p { max-width: 75ch; margin: 0; }
+    h1 { margin: 0 0 8px; font-size: 30px; line-height: 1.2; }
+    header p { margin: 0; }
     p { line-height: 1.5; }
-
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 16px;
-      margin: 18px 0;
+    .stats, .links { margin: 16px -7px; }
+    .stats:after, .links:after { content: ""; display: table; clear: both; }
+    .stat, .link {
+      float: left;
+      width: 25%;
+      padding: 7px;
     }
-
-    .stat, .details, .link {
-      min-width: 0;
-      background: white;
-      border-radius: 16px;
+    .stat-inner, .link-inner {
+      display: block;
+      min-height: 148px;
+      padding: 19px;
+      border-radius: 14px;
+      background: #ffffff;
     }
-
-    .stat {
-      display: flex;
-      flex-direction: column;
-      min-height: 158px;
-      padding: clamp(16px, 2vw, 24px);
-    }
-
     .stat small {
       display: block;
-      color: var(--muted);
-      font-size: 0.88rem;
-      line-height: 1.4;
-      margin-bottom: 10px;
+      margin-bottom: 14px;
+      color: #526b7a;
+      font-size: 14px;
+      line-height: 1.35;
     }
-
     .stat strong {
       display: block;
-      margin-top: auto;
-      font-size: clamp(1.8rem, 3.2vw, 2.6rem);
-      font-variant-numeric: tabular-nums;
+      font-size: 30px;
       line-height: 1.2;
     }
-
-    .stat p {
-      margin: 7px 0 0;
-      color: var(--muted);
-      font-size: 0.85rem;
+    .stat p { margin: 6px 0 0; color: #526b7a; font-size: 13px; }
+    .bar { height: 9px; margin-top: 12px; border-radius: 8px; background: #e0eaf0; overflow: hidden; }
+    .fill { height: 100%; width: 0; background: #178066; }
+    .details {
+      clear: both;
+      padding: 22px;
+      border-radius: 14px;
+      background: #ffffff;
     }
-
-    .bar {
-      height: 10px;
-      margin-top: 12px;
-      overflow: hidden;
-      border-radius: 10px;
-      background: #e0eaf0;
-    }
-
-    .fill { width: 0; height: 100%; background: var(--green); }
-    .details { padding: clamp(18px, 2.5vw, 28px); }
-    .details h2 { margin: 0 0 12px; font-size: 1.25rem; }
-    .details p { margin: 8px 0; overflow-wrap: anywhere; }
-    #tasks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; }
-    #tasks p { margin: 4px 0; }
-    .muted { color: var(--muted); }
+    .details h2 { margin: 0 0 10px; font-size: 21px; }
+    .details p { margin: 8px 0; }
+    .muted { color: #526b7a; }
     .error { color: #a12323; }
-
     .refresh {
       min-height: 44px;
       padding: 10px 16px;
       border: 0;
-      border-radius: 9px;
-      background: var(--navy);
-      color: white;
-      font: inherit;
+      border-radius: 8px;
+      background: #173d59;
+      color: #ffffff;
+      font-size: 15px;
       cursor: pointer;
     }
-
-    .links {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      margin: 18px 0;
+    .link { width: 50%; color: #193447; text-decoration: none; }
+    .link-inner { min-height: 112px; }
+    .link strong { display: block; margin-bottom: 5px; font-size: 20px; }
+    .link span { color: #526b7a; }
+    .link:hover .link-inner, .link:focus .link-inner { outline: 2px solid #178066; }
+    footer { clear: both; padding-top: 8px; color: #526b7a; font-size: 13px; }
+    @media screen and (max-width: 1024px) {
+      .stat { width: 50%; }
+      .stat-inner { min-height: 125px; }
+      h1 { font-size: 27px; }
     }
-
-    .link {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      min-height: 125px;
-      padding: clamp(18px, 2.5vw, 28px);
-      border: 2px solid transparent;
-      color: var(--ink);
-      text-decoration: none;
-      transition: border-color 0.15s, transform 0.15s;
-    }
-
-    .link:hover, .link:focus-visible {
-      border-color: var(--green);
-      transform: translateY(-1px);
-    }
-
-    .link strong { display: block; margin-bottom: 5px; font-size: clamp(1.1rem, 2vw, 1.35rem); }
-    .link span { color: var(--muted); }
-    .refresh:focus-visible, .link:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
-    footer { margin-top: 18px; color: var(--muted); font-size: 0.85rem; }
-
-    /* iPad portrait and smaller laptops: spacious 2-column summary. */
-    @media (max-width: 1024px) {
-      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .stat { min-height: 136px; }
-      .stat strong { font-size: 2.1rem; }
-    }
-
-    /* Phone and narrow split-screen iPad windows. */
-    @media (max-width: 600px) {
+    @media screen and (max-width: 600px) {
       body { padding: 12px; }
-      header { border-radius: 16px; }
-      .stats, .links { gap: 10px; margin: 12px 0; }
-      .stat { min-height: 122px; padding: 15px; }
-      .stat strong { font-size: 1.7rem; }
-      .stat small { font-size: 0.8rem; }
+      header { padding: 22px; }
+      h1 { font-size: 24px; }
+      .stats, .links { margin: 12px -5px; }
+      .stat, .link { padding: 5px; }
+      .stat-inner { padding: 15px; min-height: 118px; }
+      .stat strong { font-size: 25px; }
+      .link { width: 100%; }
+      .link-inner { min-height: 90px; padding: 17px; }
       .details { padding: 18px; }
-      #tasks, .links { grid-template-columns: 1fr; }
-      .link { min-height: 96px; padding: 18px; }
     }
-
-    @media (max-width: 350px) {
-      .stats { grid-template-columns: 1fr; }
-      .stat { min-height: 100px; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .link { transition: none; }
+    @media screen and (max-width: 350px) {
+      .stat { width: 100%; }
     }
   </style>
 </head>
@@ -184,24 +113,24 @@
     </header>
 
     <section class="stats" aria-label="Live family dashboard">
-      <div class="stat">
+      <div class="stat"><div class="stat-inner">
         <small>Monthly completion</small>
         <strong id="completion">…</strong>
         <div class="bar"><div class="fill" id="fill"></div></div>
-      </div>
-      <div class="stat">
+      </div></div>
+      <div class="stat"><div class="stat-inner">
         <small>Pocket money earned</small>
         <strong id="money">…</strong>
         <p>Out of £20 possible</p>
-      </div>
-      <div class="stat">
+      </div></div>
+      <div class="stat"><div class="stat-inner">
         <small>Today's outstanding chores</small>
         <strong id="outstanding">…</strong>
-      </div>
-      <div class="stat">
+      </div></div>
+      <div class="stat"><div class="stat-inner">
         <small>Awaiting parent sign-off</small>
         <strong id="pending">…</strong>
-      </div>
+      </div></div>
     </section>
 
     <section class="details" aria-label="Outstanding chores and savings">
@@ -213,15 +142,15 @@
     </section>
 
     <div class="links">
-      <a class="link" href="https://script.google.com/macros/s/AKfycbzUN9V5U7EupyzyuxAXgkPeTTNdgmgK1uEXaLc1l6tqW0nl-whbB9jKs-kLKC0Clpg2/exec?page=child">
+      <a class="link" href="https://script.google.com/macros/s/AKfycbzUN9V5U7EupyzyuxAXgkPeTTNdgmgK1uEXaLc1l6tqW0nl-whbB9jKs-kLKC0Clpg2/exec?page=child"><div class="link-inner">
         <strong>✓ James's chore tracker</strong>
         <span>Mark daily chores and see approved progress</span>
-      </a>
+      </div></a>
 
-      <a class="link" href="https://script.google.com/macros/s/AKfycbzUN9V5U7EupyzyuxAXgkPeTTNdgmgK1uEXaLc1l6tqW0nl-whbB9jKs-kLKC0Clpg2/exec?page=parent">
+      <a class="link" href="https://script.google.com/macros/s/AKfycbzUN9V5U7EupyzyuxAXgkPeTTNdgmgK1uEXaLc1l6tqW0nl-whbB9jKs-kLKC0Clpg2/exec?page=parent"><div class="link-inner">
         <strong>🔐 Parent sign-off</strong>
         <span>Review and approve chores using your PIN</span>
-      </a>
+      </div></a>
     </div>
 
     <footer>
@@ -246,7 +175,7 @@
         ' (£50 guaranteed + £' + data.savingsBonus + ' bonus).';
 
       const tasks = el('tasks');
-      tasks.replaceChildren();
+      while (tasks.firstChild) tasks.removeChild(tasks.firstChild);
 
       if (!data.outstanding.length) {
         const p = document.createElement('p');
