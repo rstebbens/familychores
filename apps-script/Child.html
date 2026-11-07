@@ -29,11 +29,13 @@
     h1 { margin: 0; }
     header p { margin-bottom: 0; }
 
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin: 16px 0;
+    .cards { margin: 16px -5px; overflow: hidden; }
+    .cards:after { content: ""; display: table; clear: both; }
+    .card {
+      float: left;
+      width: 32.3%;
+      margin: 0 0.5% 12px;
+      min-height: 112px;
     }
 
     .card, .panel {
@@ -95,9 +97,15 @@
     .back:hover { background: #245779; }
     #message { font-weight: bold; min-height: 1em; }
 
-    @media (max-width: 600px) {
-      .card { padding: 10px; }
-      .card strong { font-size: 21px; }
+    @media (max-width: 700px) {
+      .card { width: 49%; padding: 13px; }
+      .card strong { font-size: 23px; }
+      header { padding: 20px; }
+    }
+
+    @media (max-width: 420px) {
+      .card { width: 99%; min-height: 0; }
+      .day { width: 36px; height: 36px; }
     }
   </style>
 </head>
@@ -173,12 +181,17 @@
       String(now.getMonth() + 1).padStart(2, '0');
 
     function error(problem) {
+      clearTimeout(window.choreLoadTimer);
       el('message').textContent =
         'Error: ' + (problem.message || String(problem));
     }
 
     function load() {
       el('message').textContent = 'Loading…';
+      if (window.choreLoadTimer) clearTimeout(window.choreLoadTimer);
+      window.choreLoadTimer = setTimeout(function () {
+        el('message').textContent = 'Still loading. If this persists, try opening the tracker in Safari or updating iPadOS.';
+      }, 12000);
 
       google.script.run
         .withSuccessHandler(render)
@@ -196,6 +209,7 @@
     }
 
     function render(data) {
+      clearTimeout(window.choreLoadTimer);
       el('message').textContent = '';
 
       const totals = data.totals;
