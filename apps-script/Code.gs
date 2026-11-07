@@ -1,20 +1,318 @@
+/**
+ * Family Chores backend.
+ * Runs as a Google Apps Script web application bound to the family spreadsheet.
+ * Parent PIN is stored as a salted hash in Script Properties.
+ */
+
 const SHEET_ID = '1zKPw9gjkloEmlNGhQlxpZAlA3Wy5_FA7qw8JiNNfbxk';
-const SHEETS = {log:'Daily Log',chores:'Chore Settings'};
+const SHEETS = {
+  log: 'Daily Log',
+  chores: 'Chore Settings'
+};
 const ZONE = 'Europe/London';
-function tab(name){const s=SpreadsheetApp.openById(SHEET_ID).getSheetByName(name);if(!s)throw Error('Missing tab: '+name);return s;}
-function digest(v){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,v).map(b=>('0'+(b&255).toString(16)).slice(-2)).join('');}
-function setParentPin(){const ui=SpreadsheetApp.getUi(),r=ui.prompt('Parent PIN','Enter a new 6-8 digit PIN',ui.ButtonSet.OK_CANCEL);if(r.getSelectedButton()!==ui.Button.OK)return;const pin=r.getResponseText().trim();if(!/^\d{6,8}$/.test(pin)){ui.alert('Use 6-8 digits');return;}const salt=Utilities.getUuid();PropertiesService.getScriptProperties().setProperties({PIN_SALT:salt,PIN_HASH:digest(salt+':'+pin)});ui.alert('PIN saved.');}
-function onOpen(){SpreadsheetApp.getUi().createMenu('Family Chores').addItem('Set/change parent PIN','setParentPin').addToUi();}
-function auth(pin){const p=PropertiesService.getScriptProperties();if(!p.getProperty('PIN_HASH')||digest(p.getProperty('PIN_SALT')+':'+String(pin))!==p.getProperty('PIN_HASH'))throw Error('Incorrect PIN');}
-function today(){return Utilities.formatDate(new Date(),ZONE,'yyyy-MM-dd');}
-function dateOk(v){if(!/^\d{4}-\d{2}-\d{2}$/.test(v)||isNaN(Date.parse(v))||new Date(v+'T12:00:00Z').toISOString().slice(0,10)!==v)throw Error('Invalid date');return v;}
-function chores(){return tab(SHEETS.chores).getDataRange().getValues().slice(1).filter(r=>r[0]&&(r[4]===true||String(r[4]).toLowerCase()==='true')).map(r=>({id:String(r[0]),name:String(r[1]),weight:Number(r[3])}));}
-function entries(){return tab(SHEETS.log).getDataRange().getValues().slice(1).filter(r=>r[0]).map((r,i)=>({row:i+2,id:String(r[0]),date:r[1] instanceof Date?Utilities.formatDate(r[1],ZONE,'yyyy-MM-dd'):String(r[1]),child:String(r[2]),choreId:String(r[3]),chore:String(r[4]),status:String(r[5]),submittedAt:String(r[6]||''),reviewedAt:String(r[7]||'')}));}
-function monthData(month,privileged){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('Invalid month');const es=entries().filter(e=>e.child==='James'&&e.date.startsWith(month)),cs=chores(),[y,m]=month.split('-').map(Number),last=new Date(y,m,0).getDate(),end=today();let points=0,possible=0,pending=0;for(const c of cs){let applicable=0,approved=0;for(let d=1;d<=last;d++){const date=month+'-'+String(d).padStart(2,'0');if(date>end)continue;const e=es.find(e=>e.date===date&&e.choreId===c.id);if(e&&e.status==='Not Needed')continue;applicable++;if(e&&e.status==='Approved')approved++;if(e&&e.status==='Pending')pending++;}if(applicable){points+=c.weight*approved/applicable;possible+=c.weight;}}const percentage=possible?Math.round(10000*points/possible)/100:0;const bonus=percentage===100&&pending===0?20:0;return{month,child:'James',chores:cs,entries:es.map(e=>privileged?e:{date:e.date,choreId:e.choreId,status:e.status}),totals:{completionPercent:percentage,pocketMoney:Math.round(percentage*20)/100,savingsBonus:bonus,guaranteedSavings:50,totalSavings:50+bonus,pendingApprovals:pending}};}
-function submit(date,choreId){dateOk(date);if(date>today())throw Error('Future date');const c=chores().find(x=>x.id===choreId);if(!c)throw Error('Unknown chore');const lock=LockService.getScriptLock();lock.waitLock(15000);try{if(entries().some(e=>e.date===date&&e.choreId===choreId&&e.child==='James'))throw Error('Already submitted');tab(SHEETS.log).appendRow([Utilities.getUuid(),date,'James',c.id,c.name,'Pending',new Date().toISOString(),'','','']);return{success:true};}finally{lock.releaseLock();}}
-function review(pin,decisions){auth(pin);if(!Array.isArray(decisions)||!decisions.length||decisions.length>200)throw Error('Invalid decisions');const lock=LockService.getScriptLock();lock.waitLock(15000);try{const es=entries(),ids=new Set();for(const d of decisions){if(!['Approved','Rejected','Not Needed'].includes(d.status)||ids.has(d.id))throw Error('Invalid decision');ids.add(d.id);const e=es.find(e=>e.id===d.id);if(!e||e.status!=='Pending')throw Error('Already reviewed or missing');}const s=tab(SHEETS.log);for(const d of decisions){const e=es.find(e=>e.id===d.id);s.getRange(e.row,6,1,5).setValues([[d.status,e.submittedAt,new Date().toISOString(),'Parent',String(d.notes||'').slice(0,250)]]);}return{reviewed:decisions.length};}finally{lock.releaseLock();}}
-function doGet(e){const p=e.parameter||{};if(p.page==='parent')return HtmlService.createHtmlOutputFromFile('Parent').setTitle('Family Chores · Parent');if(p.page==='child')return HtmlService.createHtmlOutputFromFile('Child').setTitle('Family Chores · James');return HtmlService.createHtmlOutput('<p>Open <a href="?page=child">James’s chores</a> or <a href="?page=parent">Parent sign-off</a>.</p>');}
-function apiMonth(month){return monthData(month,false);}
-function apiSubmit(date,choreId){return submit(date,choreId);}
-function apiParentMonth(pin,month){auth(pin);return monthData(month,true);}
-function apiReview(pin,decisions){return review(pin,decisions);}
+
+function tab(name) {
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(name);
+  if (!sheet) throw Error('Missing tab: ' + name);
+  return sheet;
+}
+
+function digest(value) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value)
+    .map(byte => ('0' + (byte & 255).toString(16)).slice(-2))
+    .join('');
+}
+
+function setParentPin() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt(
+    'Parent PIN',
+    'Enter a new 6-8 digit PIN',
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (response.getSelectedButton() !== ui.Button.OK) return;
+
+  const pin = response.getResponseText().trim();
+  if (!/^\d{6,8}$/.test(pin)) {
+    ui.alert('Use 6-8 digits');
+    return;
+  }
+
+  const salt = Utilities.getUuid();
+  PropertiesService.getScriptProperties().setProperties({
+    PIN_SALT: salt,
+    PIN_HASH: digest(salt + ':' + pin)
+  });
+
+  ui.alert('PIN saved.');
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Family Chores')
+    .addItem('Set/change parent PIN', 'setParentPin')
+    .addToUi();
+}
+
+function auth(pin) {
+  const properties = PropertiesService.getScriptProperties();
+  const salt = properties.getProperty('PIN_SALT');
+  const expectedHash = properties.getProperty('PIN_HASH');
+
+  if (!expectedHash || digest(salt + ':' + String(pin)) !== expectedHash) {
+    throw Error('Incorrect PIN');
+  }
+}
+
+function today() {
+  return Utilities.formatDate(new Date(), ZONE, 'yyyy-MM-dd');
+}
+
+function dateOk(value) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    isNaN(Date.parse(value)) ||
+    new Date(value + 'T12:00:00Z').toISOString().slice(0, 10) !== value
+  ) {
+    throw Error('Invalid date');
+  }
+
+  return value;
+}
+
+function chores() {
+  return tab(SHEETS.chores)
+    .getDataRange()
+    .getValues()
+    .slice(1)
+    .filter(row =>
+      row[0] &&
+      (row[4] === true || String(row[4]).toLowerCase() === 'true')
+    )
+    .map(row => ({
+      id: String(row[0]),
+      name: String(row[1]),
+      weight: Number(row[3])
+    }));
+}
+
+function entries() {
+  return tab(SHEETS.log)
+    .getDataRange()
+    .getValues()
+    .slice(1)
+    .filter(row => row[0])
+    .map((row, index) => ({
+      row: index + 2,
+      id: String(row[0]),
+      date: row[1] instanceof Date
+        ? Utilities.formatDate(row[1], ZONE, 'yyyy-MM-dd')
+        : String(row[1]),
+      child: String(row[2]),
+      choreId: String(row[3]),
+      chore: String(row[4]),
+      status: String(row[5]),
+      submittedAt: String(row[6] || ''),
+      reviewedAt: String(row[7] || '')
+    }));
+}
+
+function monthData(month, privileged) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    throw Error('Invalid month');
+  }
+
+  const monthlyEntries = entries().filter(entry =>
+    entry.child === 'James' && entry.date.startsWith(month)
+  );
+  const activeChores = chores();
+  const [year, monthNumber] = month.split('-').map(Number);
+  const lastDay = new Date(year, monthNumber, 0).getDate();
+  const currentDate = today();
+
+  let points = 0;
+  let possible = 0;
+  let pending = 0;
+
+  for (const chore of activeChores) {
+    let applicable = 0;
+    let approved = 0;
+
+    for (let day = 1; day <= lastDay; day++) {
+      const date = month + '-' + String(day).padStart(2, '0');
+      if (date > currentDate) continue;
+
+      const entry = monthlyEntries.find(item =>
+        item.date === date && item.choreId === chore.id
+      );
+
+      if (entry && entry.status === 'Not Needed') continue;
+
+      applicable++;
+      if (entry && entry.status === 'Approved') approved++;
+      if (entry && entry.status === 'Pending') pending++;
+    }
+
+    if (applicable) {
+      points += chore.weight * approved / applicable;
+      possible += chore.weight;
+    }
+  }
+
+  const percentage = possible
+    ? Math.round(10000 * points / possible) / 100
+    : 0;
+  const bonus = percentage === 100 && pending === 0 ? 20 : 0;
+
+  return {
+    month,
+    child: 'James',
+    chores: activeChores,
+    entries: monthlyEntries.map(entry =>
+      privileged
+        ? entry
+        : {
+            date: entry.date,
+            choreId: entry.choreId,
+            status: entry.status
+          }
+    ),
+    totals: {
+      completionPercent: percentage,
+      pocketMoney: Math.round(percentage * 20) / 100,
+      savingsBonus: bonus,
+      guaranteedSavings: 50,
+      totalSavings: 50 + bonus,
+      pendingApprovals: pending
+    }
+  };
+}
+
+function submit(date, choreId) {
+  dateOk(date);
+  if (date > today()) throw Error('Future date');
+
+  const chore = chores().find(item => item.id === choreId);
+  if (!chore) throw Error('Unknown chore');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+
+  try {
+    const alreadySubmitted = entries().some(entry =>
+      entry.date === date &&
+      entry.choreId === choreId &&
+      entry.child === 'James'
+    );
+    if (alreadySubmitted) throw Error('Already submitted');
+
+    tab(SHEETS.log).appendRow([
+      Utilities.getUuid(),
+      date,
+      'James',
+      chore.id,
+      chore.name,
+      'Pending',
+      new Date().toISOString(),
+      '',
+      '',
+      ''
+    ]);
+
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function review(pin, decisions) {
+  auth(pin);
+
+  if (
+    !Array.isArray(decisions) ||
+    !decisions.length ||
+    decisions.length > 200
+  ) {
+    throw Error('Invalid decisions');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+
+  try {
+    const allEntries = entries();
+    const seenIds = new Set();
+
+    for (const decision of decisions) {
+      if (
+        !['Approved', 'Rejected', 'Not Needed'].includes(decision.status) ||
+        seenIds.has(decision.id)
+      ) {
+        throw Error('Invalid decision');
+      }
+
+      seenIds.add(decision.id);
+      const entry = allEntries.find(item => item.id === decision.id);
+      if (!entry || entry.status !== 'Pending') {
+        throw Error('Already reviewed or missing');
+      }
+    }
+
+    const logSheet = tab(SHEETS.log);
+
+    for (const decision of decisions) {
+      const entry = allEntries.find(item => item.id === decision.id);
+
+      // Columns F-J: status, submitted, reviewed, reviewer, notes.
+      logSheet.getRange(entry.row, 6, 1, 5).setValues([[
+        decision.status,
+        entry.submittedAt,
+        new Date().toISOString(),
+        'Parent',
+        String(decision.notes || '').slice(0, 250)
+      ]]);
+    }
+
+    return { reviewed: decisions.length };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function doGet(event) {
+  const params = event.parameter || {};
+
+  if (params.page === 'parent') {
+    return HtmlService.createHtmlOutputFromFile('Parent')
+      .setTitle('Family Chores · Parent');
+  }
+
+  if (params.page === 'child') {
+    return HtmlService.createHtmlOutputFromFile('Child')
+      .setTitle('Family Chores · James');
+  }
+
+  return HtmlService.createHtmlOutput(
+    '<p>Open <a href="?page=child">James’s chores</a> ' +
+    'or <a href="?page=parent">Parent sign-off</a>.</p>'
+  );
+}
+
+// Functions called by google.script.run in the hosted HTML pages.
+function apiMonth(month) {
+  return monthData(month, false);
+}
+
+function apiSubmit(date, choreId) {
+  return submit(date, choreId);
+}
+
+function apiParentMonth(pin, month) {
+  auth(pin);
+  return monthData(month, true);
+}
+
+function apiReview(pin, decisions) {
+  return review(pin, decisions);
+}
