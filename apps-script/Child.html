@@ -1,7 +1,281 @@
-<!doctype html><html lang="en"><head><base target="_top"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>James's Chore Challenge</title><style>*{box-sizing:border-box}body{font:16px system-ui;background:#eef4f7;color:#193447;margin:0;padding:16px}main{max-width:950px;margin:auto}header{background:#173d59;color:white;padding:25px;border-radius:20px}h1{margin:0}header p{margin-bottom:0}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}.card,.panel{background:white;border-radius:16px;padding:17px;margin-bottom:14px}.card small{color:#526b7a}.card strong{display:block;font-size:28px}.task{border-top:1px solid #ddd;padding:15px 0}.task small{display:block;color:#607783;margin:4px 0 10px}.days{display:flex;gap:5px;flex-wrap:wrap}.day{width:38px;height:38px;border:1px solid #b8ccd5;border-radius:8px;background:#f4f8fa;cursor:pointer}.day.approved{background:#178066;color:white}.day.pending{background:#f7d98a;color:#4a3900}.day.rejected{background:#f8c9c9;color:#6c1616}.day.na{background:#d9e2e8;color:#536675}.day:disabled{opacity:.4;cursor:default}.bar{height:14px;background:#e0eaf0;border-radius:20px;overflow:hidden}.fill{height:100%;background:#178066}.note{color:#5d7180;font-size:13px;line-height:1.5}input{font:inherit}nav{margin:0 0 14px}nav a{color:#173d59}#message{font-weight:bold;min-height:1em}@media(max-width:600px){.card{padding:10px}.card strong{font-size:21px}}nav{margin:0 0 18px}.back{display:inline-block;background:#173d59;color:#fff!important;padding:11px 16px;border-radius:9px;text-decoration:none;font-weight:600}.back:hover{background:#245779}</style></head><body><main><nav><a class="back" href="https://rstebbens.github.io/familychores/" target="_top">← Back to Family Chores</a></nav><header><h1>🏆 James's Chore Challenge</h1><p>Take ownership, build habits, earn up to £20 pocket money and unlock £20 extra savings every month.</p></header><div class="cards"><div class="card"><small>Approved pocket money</small><strong id="pocket">£0</strong></div><div class="card"><small>Savings bonus</small><strong id="bonus">£0</strong></div><div class="card"><small>Total savings</small><strong id="savings">£50</strong></div></div><section class="panel"><label>Month: <input type="month" id="month"></label><p class="note">Tap an empty day to submit a completed chore. Amber = awaiting parent approval; green = approved; grey = not needed; red = rejected. You cannot edit an entry once submitted.</p><p id="message" role="status"></p><div id="tasks"></div></section><section class="panel"><h2>Monthly progress</h2><div class="bar"><div class="fill" id="fill"></div></div><h3 id="progress">Loading…</h3><p id="status"></p><p class="note">Weights: dishwasher 35%, bedroom 20%, laundry 10%, dinner table 20%, belongings 15%. Pocket money is based on parent-approved completion. £50 monthly savings are guaranteed; £20 bonus requires 100% approved completion. Unmarked days count as incomplete once the day has passed.</p></section></main><script>
-const el=id=>document.getElementById(id);const now=new Date();el('month').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
-function error(e){el('message').textContent='Error: '+(e.message||String(e))}
-function load(){el('message').textContent='Loading…';google.script.run.withSuccessHandler(render).withFailureHandler(error).apiMonth(el('month').value)}
-function render(d){el('message').textContent='';el('pocket').textContent='£'+d.totals.pocketMoney.toFixed(2);el('bonus').textContent='£'+d.totals.savingsBonus;el('savings').textContent='£'+d.totals.totalSavings;el('progress').textContent=d.totals.completionPercent.toFixed(1)+'% approved';el('fill').style.width=d.totals.completionPercent+'%';el('status').textContent=d.totals.pendingApprovals?d.totals.pendingApprovals+' chores awaiting parent sign-off':d.totals.savingsBonus?'🎉 Full savings bonus unlocked!':'';const [y,m]=d.month.split('-').map(Number),days=new Date(y,m,0).getDate(),today=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()).split('/').reverse().join('-');let html='';d.chores.forEach(c=>{let buttons='';for(let i=1;i<=days;i++){const date=d.month+'-'+String(i).padStart(2,'0'),e=d.entries.find(e=>e.date===date&&e.choreId===c.id),status=e?e.status:'',future=date>today;const cls=status==='Approved'?'approved':status==='Pending'?'pending':status==='Rejected'?'rejected':status==='Not Needed'?'na':'';buttons+='<button class="day '+cls+'" data-date="'+date+'" data-chore="'+c.id+'" title="'+date+': '+(status||'unmarked')+'" '+(future||e?'disabled':'')+'>'+i+'</button>'}html+='<div class="task"><b>'+c.name+' · '+c.weight+' points</b><small>'+(buttons.match(/class="day approved"/g)||[]).length+' approved days</small><div class="days">'+buttons+'</div></div>'});el('tasks').innerHTML=html;document.querySelectorAll('button[data-chore]:not(:disabled)').forEach(b=>b.onclick=()=>{b.disabled=true;el('message').textContent='Saving…';google.script.run.withSuccessHandler(load).withFailureHandler(error).apiSubmit(b.dataset.date,b.dataset.chore)})}
-el('month').onchange=load;load();
-</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>James's Chore Challenge</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font: 16px system-ui;
+      background: #eef4f7;
+      color: #193447;
+      margin: 0;
+      padding: 16px;
+    }
+
+    main { max-width: 950px; margin: auto; }
+
+    header {
+      background: #173d59;
+      color: white;
+      padding: 25px;
+      border-radius: 20px;
+    }
+
+    h1 { margin: 0; }
+    header p { margin-bottom: 0; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .card, .panel {
+      background: white;
+      border-radius: 16px;
+      padding: 17px;
+      margin-bottom: 14px;
+    }
+
+    .card small { color: #526b7a; }
+    .card strong { display: block; font-size: 28px; }
+    .task { border-top: 1px solid #ddd; padding: 15px 0; }
+    .task small { display: block; color: #607783; margin: 4px 0 10px; }
+    .days { display: flex; gap: 5px; flex-wrap: wrap; }
+
+    .day {
+      width: 38px;
+      height: 38px;
+      border: 1px solid #b8ccd5;
+      border-radius: 8px;
+      background: #f4f8fa;
+      cursor: pointer;
+    }
+
+    .day.approved { background: #178066; color: white; }
+    .day.pending { background: #f7d98a; color: #4a3900; }
+    .day.rejected { background: #f8c9c9; color: #6c1616; }
+    .day.na { background: #d9e2e8; color: #536675; }
+    .day:disabled { opacity: 0.4; cursor: default; }
+
+    .bar {
+      height: 14px;
+      background: #e0eaf0;
+      border-radius: 20px;
+      overflow: hidden;
+    }
+
+    .fill { height: 100%; background: #178066; }
+
+    .note {
+      color: #5d7180;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    input { font: inherit; }
+    nav { margin-bottom: 18px; }
+
+    .back {
+      display: inline-block;
+      background: #173d59;
+      color: white;
+      padding: 11px 16px;
+      border-radius: 9px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .back:hover { background: #245779; }
+    #message { font-weight: bold; min-height: 1em; }
+
+    @media (max-width: 600px) {
+      .card { padding: 10px; }
+      .card strong { font-size: 21px; }
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <nav>
+      <a class="back"
+         href="https://rstebbens.github.io/familychores/"
+         target="_top">
+        ← Back to Family Chores
+      </a>
+    </nav>
+
+    <header>
+      <h1>🏆 James's Chore Challenge</h1>
+      <p>Take ownership, build habits, earn up to £20 pocket money and unlock £20 extra savings every month.</p>
+    </header>
+
+    <div class="cards">
+      <div class="card">
+        <small>Approved pocket money</small>
+        <strong id="pocket">£0</strong>
+      </div>
+      <div class="card">
+        <small>Savings bonus</small>
+        <strong id="bonus">£0</strong>
+      </div>
+      <div class="card">
+        <small>Total savings</small>
+        <strong id="savings">£50</strong>
+      </div>
+    </div>
+
+    <section class="panel">
+      <label for="month">Month:</label>
+      <input type="month" id="month">
+
+      <p class="note">
+        Tap an empty day to submit a completed chore.
+        Amber = awaiting parent approval; green = approved;
+        grey = not needed; red = rejected.
+        You cannot edit an entry once submitted.
+      </p>
+
+      <p id="message" role="status"></p>
+      <div id="tasks"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Monthly progress</h2>
+      <div class="bar"><div class="fill" id="fill"></div></div>
+      <h3 id="progress">Loading…</h3>
+      <p id="status"></p>
+
+      <p class="note">
+        Weights: dishwasher 35%, bedroom 20%, laundry 10%,
+        dinner table 20%, belongings 15%.
+        Pocket money is based on parent-approved completion.
+        £50 monthly savings are guaranteed; £20 bonus requires 100%
+        approved completion. Unmarked days count as incomplete
+        once the day has passed.
+      </p>
+    </section>
+  </main>
+
+  <script>
+    const el = id => document.getElementById(id);
+    const now = new Date();
+
+    el('month').value =
+      now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0');
+
+    function error(problem) {
+      el('message').textContent =
+        'Error: ' + (problem.message || String(problem));
+    }
+
+    function load() {
+      el('message').textContent = 'Loading…';
+
+      google.script.run
+        .withSuccessHandler(render)
+        .withFailureHandler(error)
+        .apiMonth(el('month').value);
+    }
+
+    function londonToday() {
+      return new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/London',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(new Date()).split('/').reverse().join('-');
+    }
+
+    function render(data) {
+      el('message').textContent = '';
+
+      const totals = data.totals;
+      el('pocket').textContent = '£' + totals.pocketMoney.toFixed(2);
+      el('bonus').textContent = '£' + totals.savingsBonus;
+      el('savings').textContent = '£' + totals.totalSavings;
+      el('progress').textContent =
+        totals.completionPercent.toFixed(1) + '% approved';
+      el('fill').style.width = totals.completionPercent + '%';
+
+      el('status').textContent = totals.pendingApprovals
+        ? totals.pendingApprovals + ' chores awaiting parent sign-off'
+        : totals.savingsBonus
+          ? '🎉 Full savings bonus unlocked!'
+          : '';
+
+      const [year, month] = data.month.split('-').map(Number);
+      const days = new Date(year, month, 0).getDate();
+      const today = londonToday();
+      let html = '';
+
+      data.chores.forEach(chore => {
+        let buttons = '';
+
+        for (let day = 1; day <= days; day++) {
+          const date = data.month + '-' + String(day).padStart(2, '0');
+          const entry = data.entries.find(item =>
+            item.date === date && item.choreId === chore.id
+          );
+          const status = entry ? entry.status : '';
+          const future = date > today;
+
+          const className = status === 'Approved'
+            ? 'approved'
+            : status === 'Pending'
+              ? 'pending'
+              : status === 'Rejected'
+                ? 'rejected'
+                : status === 'Not Needed'
+                  ? 'na'
+                  : '';
+
+          buttons +=
+            '<button class="day ' + className + '"' +
+            ' data-date="' + date + '"' +
+            ' data-chore="' + chore.id + '"' +
+            ' title="' + date + ': ' + (status || 'unmarked') + '"' +
+            (future || entry ? ' disabled' : '') +
+            '>' + day + '</button>';
+        }
+
+        const approvedDays =
+          (buttons.match(/class="day approved"/g) || []).length;
+
+        html +=
+          '<div class="task">' +
+          '<b>' + chore.name + ' · ' + chore.weight + ' points</b>' +
+          '<small>' + approvedDays + ' approved days</small>' +
+          '<div class="days">' + buttons + '</div>' +
+          '</div>';
+      });
+
+      el('tasks').innerHTML = html;
+
+      document.querySelectorAll('button[data-chore]:not(:disabled)')
+        .forEach(button => {
+          button.onclick = () => {
+            button.disabled = true;
+            el('message').textContent = 'Saving…';
+
+            google.script.run
+              .withSuccessHandler(load)
+              .withFailureHandler(error)
+              .apiSubmit(button.dataset.date, button.dataset.chore);
+          };
+        });
+    }
+
+    el('month').onchange = load;
+    load();
+  </script>
+</body>
+</html>
