@@ -5,79 +5,174 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>James's Chore Challenge</title>
   <style>
+    :root {
+      color-scheme: light;
+      --navy: #173d59;
+      --ink: #193447;
+      --muted: #526b7a;
+      --page: #eef4f7;
+      --green: #178066;
+    }
+
     * { box-sizing: border-box; }
 
     body {
-      font: 16px system-ui;
-      background: #eef4f7;
-      color: #193447;
       margin: 0;
-      padding: 24px;
+      padding: clamp(14px, 3vw, 36px);
+      background: var(--page);
+      color: var(--ink);
+      font: 16px/1.5 system-ui, -apple-system, sans-serif;
+      -webkit-text-size-adjust: 100%;
     }
 
-    main { max-width: 850px; margin: 7vh auto; }
-    header { background: #173d59; color: white; padding: 35px; border-radius: 20px; }
-    h1 { margin: 0 0 10px; }
-    p { line-height: 1.55; }
+    main {
+      width: min(100%, 1180px);
+      margin: 0 auto;
+    }
+
+    header {
+      padding: clamp(22px, 3.5vw, 38px);
+      border-radius: 20px;
+      background: var(--navy);
+      color: white;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.6rem, 3vw, 2.35rem);
+      line-height: 1.2;
+      letter-spacing: -0.025em;
+    }
+
+    header p { max-width: 75ch; margin: 0; }
+    p { line-height: 1.5; }
 
     .stats {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin: 20px 0 12px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin: 18px 0;
     }
 
-    .stat, .details {
+    .stat, .details, .link {
+      min-width: 0;
       background: white;
       border-radius: 16px;
-      padding: 20px;
     }
 
-    .stat small { display: block; color: #526b7a; margin-bottom: 8px; }
-    .stat strong { display: block; font-size: 28px; }
-    .stat p { color: #526b7a; margin: 4px 0 0; font-size: 13px; }
-    .details { margin-bottom: 16px; }
-    .details h2 { margin: 0 0 10px; font-size: 20px; }
-    .details p { margin: 6px 0; }
-    .bar { height: 10px; border-radius: 8px; background: #e0eaf0; overflow: hidden; margin-top: 10px; }
-    .fill { height: 100%; width: 0; background: #178066; }
+    .stat {
+      display: flex;
+      flex-direction: column;
+      min-height: 158px;
+      padding: clamp(16px, 2vw, 24px);
+    }
+
+    .stat small {
+      display: block;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.4;
+      margin-bottom: 10px;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: auto;
+      font-size: clamp(1.8rem, 3.2vw, 2.6rem);
+      font-variant-numeric: tabular-nums;
+      line-height: 1.2;
+    }
+
+    .stat p {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .bar {
+      height: 10px;
+      margin-top: 12px;
+      overflow: hidden;
+      border-radius: 10px;
+      background: #e0eaf0;
+    }
+
+    .fill { width: 0; height: 100%; background: var(--green); }
+    .details { padding: clamp(18px, 2.5vw, 28px); }
+    .details h2 { margin: 0 0 12px; font-size: 1.25rem; }
+    .details p { margin: 8px 0; overflow-wrap: anywhere; }
+    #tasks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; }
+    #tasks p { margin: 4px 0; }
+    .muted { color: var(--muted); }
     .error { color: #a12323; }
-    .muted { color: #526b7a; }
+
     .refresh {
-      padding: 8px 12px;
+      min-height: 44px;
+      padding: 10px 16px;
       border: 0;
-      border-radius: 8px;
-      background: #173d59;
+      border-radius: 9px;
+      background: var(--navy);
       color: white;
+      font: inherit;
       cursor: pointer;
     }
 
     .links {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 15px;
-      margin: 20px 0;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin: 18px 0;
     }
 
     .link {
-      background: white;
-      border-radius: 16px;
-      padding: 28px;
-      text-decoration: none;
-      color: #193447;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 125px;
+      padding: clamp(18px, 2.5vw, 28px);
       border: 2px solid transparent;
+      color: var(--ink);
+      text-decoration: none;
+      transition: border-color 0.15s, transform 0.15s;
     }
 
-    .link:hover, .link:focus { border-color: #178066; }
-    .link strong { display: block; font-size: 22px; margin-bottom: 8px; }
-    .link span { color: #526b7a; }
-    footer { color: #526b7a; font-size: 14px; }
+    .link:hover, .link:focus-visible {
+      border-color: var(--green);
+      transform: translateY(-1px);
+    }
 
+    .link strong { display: block; margin-bottom: 5px; font-size: clamp(1.1rem, 2vw, 1.35rem); }
+    .link span { color: var(--muted); }
+    .refresh:focus-visible, .link:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
+    footer { margin-top: 18px; color: var(--muted); font-size: 0.85rem; }
+
+    /* iPad portrait and smaller laptops: spacious 2-column summary. */
+    @media (max-width: 1024px) {
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stat { min-height: 136px; }
+      .stat strong { font-size: 2.1rem; }
+    }
+
+    /* Phone and narrow split-screen iPad windows. */
     @media (max-width: 600px) {
-      .links { grid-template-columns: 1fr; }
-      .stats { grid-template-columns: repeat(2, 1fr); }
-      .stat strong { font-size: 24px; }
-      header { padding: 24px; }
+      body { padding: 12px; }
+      header { border-radius: 16px; }
+      .stats, .links { gap: 10px; margin: 12px 0; }
+      .stat { min-height: 122px; padding: 15px; }
+      .stat strong { font-size: 1.7rem; }
+      .stat small { font-size: 0.8rem; }
+      .details { padding: 18px; }
+      #tasks, .links { grid-template-columns: 1fr; }
+      .link { min-height: 96px; padding: 18px; }
+    }
+
+    @media (max-width: 350px) {
+      .stats { grid-template-columns: 1fr; }
+      .stat { min-height: 100px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .link { transition: none; }
     }
   </style>
 </head>
