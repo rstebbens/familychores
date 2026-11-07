@@ -283,6 +283,10 @@ function review(pin, decisions) {
 function doGet(event) {
   const params = event.parameter || {};
 
+  if (params.page === 'summary') {
+    return publicDashboardResponse(params.callback);
+  }
+
   if (params.page === 'dashboard') {
     return HtmlService.createHtmlOutputFromFile('Dashboard')
       .setTitle('Family Chores · Dashboard')
@@ -345,4 +349,30 @@ function apiDashboard() {
     savingsBonus: data.totals.savingsBonus,
     outstanding: outstanding.map(chore => ({ name: chore.name }))
   };
+}
+
+/**
+ * Public, read-only JSONP endpoint for the GitHub Pages dashboard.
+ *
+ * Apps Script web apps redirect ContentService output to googleusercontent.com,
+ * so ordinary cross-origin fetch() is unreliable without CORS headers.
+ * A script tag can load JSONP without needing CORS or third-party cookies.
+ *
+ * Only the limited apiDashboard() summary is published. Never add PINs,
+ * log identifiers, review notes or other private records to this response.
+ */
+function publicDashboardResponse(callback) {
+  if (!/^[A-Za-z_$][\w$]{0,63}$/.test(String(callback || ''))) {
+    return ContentService.createTextOutput('Invalid callback')
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+
+  const summary = apiDashboard();
+  const payload = JSON.stringify(summary)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+
+  return ContentService.createTextOutput(callback + '(' + payload + ');')
+    .setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
