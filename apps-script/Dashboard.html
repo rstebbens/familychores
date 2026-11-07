@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px system-ui; color: #193447; background: #eef4f7; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .stat, .detail { background: white; border-radius: 16px; padding: 20px; }
+    .stat small { color: #526b7a; display: block; margin-bottom: 8px; }
+    .stat strong { font-size: 29px; }
+    .details { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    h2 { font-size: 19px; margin: 0 0 10px; }
+    p { margin: 8px 0; line-height: 1.5; }
+    .muted { color: #526b7a; }
+    .bar { background: #e0eaf0; border-radius: 12px; height: 10px; overflow: hidden; margin-top: 12px; }
+    .fill { background: #178066; height: 100%; width: 0; }
+    .error { color: #9b2020; }
+    @media (max-width: 650px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .details { grid-template-columns: 1fr; }
+      .stat strong { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stats">
+    <div class="stat"><small>Monthly completion</small><strong id="completion">…</strong><div class="bar"><div id="fill" class="fill"></div></div></div>
+    <div class="stat"><small>Pocket money earned</small><strong id="money">…</strong><p class="muted">of £20 possible</p></div>
+    <div class="stat"><small>Today's outstanding chores</small><strong id="outstanding">…</strong></div>
+    <div class="stat"><small>Awaiting parent sign-off</small><strong id="pending">…</strong></div>
+  </div>
+  <div class="details">
+    <section class="detail">
+      <h2>James · Today</h2>
+      <div id="tasks"><p class="muted">Loading today's chores…</p></div>
+    </section>
+    <section class="detail">
+      <h2>Parent approvals & savings</h2>
+      <p id="approvals" class="muted">Loading approvals…</p>
+      <p id="savings" class="muted"></p>
+      <p class="muted">Only parent-approved chores count towards pocket money.</p>
+    </section>
+  </div>
+  <script>
+    const el = id => document.getElementById(id);
+
+    function loadDashboard() {
+      google.script.run
+        .withSuccessHandler(renderDashboard)
+        .withFailureHandler(error => {
+          el('tasks').innerHTML = '<p class="error">Dashboard unavailable. Open James\'s tracker to view progress.</p>';
+          el('approvals').textContent = error.message || String(error);
+        })
+        .apiDashboard();
+    }
+
+    function renderDashboard(data) {
+      el('completion').textContent = data.completionPercent.toFixed(1) + '%';
+      el('fill').style.width = Math.min(100, data.completionPercent) + '%';
+      el('money').textContent = '£' + data.pocketMoney.toFixed(2);
+      el('outstanding').textContent = data.outstanding.length;
+      el('pending').textContent = data.pendingApprovals;
+
+      el('tasks').textContent = '';
+      if (!data.outstanding.length) {
+        const p = document.createElement('p');
+        p.textContent = 'All of today\'s chores submitted or marked not needed.';
+        el('tasks').appendChild(p);
+      } else {
+        data.outstanding.forEach(chore => {
+          const p = document.createElement('p');
+          p.textContent = '○ ' + chore.name;
+          el('tasks').appendChild(p);
+        });
+      }
+
+      el('approvals').textContent = data.pendingApprovals
+        ? data.pendingApprovals + ' chore(s) waiting for approval.'
+        : 'No chores waiting for approval.';
+      el('savings').textContent =
+        'Savings: £' + data.totalSavings +
+        ' (£50 guaranteed + £' + data.savingsBonus + ' bonus).';
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>
