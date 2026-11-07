@@ -20,6 +20,38 @@
     h1 { margin: 0 0 10px; }
     p { line-height: 1.55; }
 
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin: 20px 0 12px;
+    }
+
+    .stat, .details {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .stat small { display: block; color: #526b7a; margin-bottom: 8px; }
+    .stat strong { display: block; font-size: 28px; }
+    .stat p { color: #526b7a; margin: 4px 0 0; font-size: 13px; }
+    .details { margin-bottom: 16px; }
+    .details h2 { margin: 0 0 10px; font-size: 20px; }
+    .details p { margin: 6px 0; }
+    .bar { height: 10px; border-radius: 8px; background: #e0eaf0; overflow: hidden; margin-top: 10px; }
+    .fill { height: 100%; width: 0; background: #178066; }
+    .error { color: #a12323; }
+    .muted { color: #526b7a; }
+    .refresh {
+      padding: 8px 12px;
+      border: 0;
+      border-radius: 8px;
+      background: #173d59;
+      color: white;
+      cursor: pointer;
+    }
+
     .links {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -43,6 +75,8 @@
 
     @media (max-width: 600px) {
       .links { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .stat strong { font-size: 24px; }
       header { padding: 24px; }
     }
   </style>
@@ -53,6 +87,35 @@
       <h1>🏆 James's Chore Challenge</h1>
       <p>Take ownership, build habits, earn up to £20 pocket money and unlock £20 extra savings every month.</p>
     </header>
+
+    <section class="stats" aria-label="Live family dashboard">
+      <div class="stat">
+        <small>Monthly completion</small>
+        <strong id="completion">…</strong>
+        <div class="bar"><div class="fill" id="fill"></div></div>
+      </div>
+      <div class="stat">
+        <small>Pocket money earned</small>
+        <strong id="money">…</strong>
+        <p>Out of £20 possible</p>
+      </div>
+      <div class="stat">
+        <small>Today's outstanding chores</small>
+        <strong id="outstanding">…</strong>
+      </div>
+      <div class="stat">
+        <small>Awaiting parent sign-off</small>
+        <strong id="pending">…</strong>
+      </div>
+    </section>
+
+    <section class="details" aria-label="Outstanding chores and savings">
+      <h2>Today's chores</h2>
+      <div id="tasks"><p class="muted">Loading from Google Sheets…</p></div>
+      <p id="savings" class="muted"></p>
+      <p id="dashboard-status" class="muted" role="status"></p>
+      <button id="refresh" class="refresh" type="button">Refresh figures</button>
+    </section>
 
     <div class="links">
       <a class="link" href="https://script.google.com/macros/s/AKfycbzUN9V5U7EupyzyuxAXgkPeTTNdgmgK1uEXaLc1l6tqW0nl-whbB9jKs-kLKC0Clpg2/exec?page=child">
@@ -72,5 +135,73 @@
       Its existing local data has not been imported.
     </footer>
   </main>
+  <script>
+    const DASHBOARD_URL = 'https://script.google.com/macros/s/AKfycbzUN9V5U7EupyzyuxAXgkPeTTNdgmgK1uEXaLc1l6tqW0nl-whbB9jKs-kLKC0Clpg2/exec?page=summary';
+    const el = id => document.getElementById(id);
+    let requestNumber = 0;
+
+    function renderSummary(data) {
+      el('completion').textContent = data.completionPercent.toFixed(1) + '%';
+      el('fill').style.width = Math.max(0, Math.min(100, data.completionPercent)) + '%';
+      el('money').textContent = '£' + data.pocketMoney.toFixed(2);
+      el('outstanding').textContent = data.outstanding.length;
+      el('pending').textContent = data.pendingApprovals;
+      el('savings').textContent =
+        'Savings: £' + data.totalSavings +
+        ' (£50 guaranteed + £' + data.savingsBonus + ' bonus).';
+
+      const tasks = el('tasks');
+      tasks.replaceChildren();
+
+      if (!data.outstanding.length) {
+        const p = document.createElement('p');
+        p.textContent = 'All of today\'s chores have been submitted or marked not needed.';
+        tasks.appendChild(p);
+      } else {
+        data.outstanding.forEach(chore => {
+          const p = document.createElement('p');
+          p.textContent = '○ ' + chore.name;
+          tasks.appendChild(p);
+        });
+      }
+
+      el('dashboard-status').textContent = 'Figures loaded from Google Sheets.';
+    }
+
+    function refreshDashboard() {
+      const requestId = ++requestNumber;
+      const callbackName = 'familyChoresSummary';
+      const previous = document.getElementById('dashboard-request');
+      if (previous) previous.remove();
+
+      el('dashboard-status').textContent = 'Refreshing figures…';
+
+      const script = document.createElement('script');
+      script.id = 'dashboard-request';
+      script.src =
+        DASHBOARD_URL +
+        '&callback=' + callbackName +
+        '&t=' + Date.now();
+
+      window[callbackName] = data => {
+        if (requestId !== requestNumber) return;
+        renderSummary(data);
+        script.remove();
+      };
+
+      script.onerror = () => {
+        if (requestId !== requestNumber) return;
+        el('dashboard-status').textContent =
+          'Live figures unavailable. You can still open the chore tracker and parent sign-off.';
+        el('dashboard-status').className = 'error';
+        script.remove();
+      };
+
+      document.body.appendChild(script);
+    }
+
+    el('refresh').addEventListener('click', refreshDashboard);
+    refreshDashboard();
+  </script>
 </body>
 </html>
