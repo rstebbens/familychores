@@ -283,6 +283,12 @@ function review(pin, decisions) {
 function doGet(event) {
   const params = event.parameter || {};
 
+  if (params.page === 'dashboard') {
+    return HtmlService.createHtmlOutputFromFile('Dashboard')
+      .setTitle('Family Chores · Dashboard')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
   if (params.page === 'parent') {
     return HtmlService.createHtmlOutputFromFile('Parent')
       .setTitle('Family Chores · Parent');
@@ -315,4 +321,28 @@ function apiParentMonth(pin, month) {
 
 function apiReview(pin, decisions) {
   return review(pin, decisions);
+}
+
+/**
+ * Read-only overview for the public family dashboard.
+ * Only returns counts, chore names and totals, never PINs or log IDs.
+ */
+function apiDashboard() {
+  const date = today();
+  const month = date.slice(0, 7);
+  const data = monthData(month, false);
+  const outstanding = data.chores.filter(chore =>
+    !data.entries.some(entry =>
+      entry.date === date && entry.choreId === chore.id
+    )
+  );
+
+  return {
+    completionPercent: data.totals.completionPercent,
+    pocketMoney: data.totals.pocketMoney,
+    pendingApprovals: data.totals.pendingApprovals,
+    totalSavings: data.totals.totalSavings,
+    savingsBonus: data.totals.savingsBonus,
+    outstanding: outstanding.map(chore => ({ name: chore.name }))
+  };
 }
