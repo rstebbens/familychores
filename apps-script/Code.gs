@@ -133,17 +133,47 @@ function optionalTab(name, headers) {
 function leaveSheet() { return optionalTab(SHEETS.leave, ['Date', 'Child', 'Created At']); }
 function bonusSheet() { return optionalTab(SHEETS.bonuses, ['ID', 'Child', 'Task', 'Amount', 'Status', 'Destination', 'Created At', 'Submitted At', 'Reviewed At']); }
 function englandWalesBankHolidays(year) {
-  // Official GOV.UK bank-holiday calendar, cached to avoid repeated requests.
-  const key = 'ew-bank-holidays-' + year;
-  const cache = CacheService.getScriptCache();
-  const cached = cache.get(key);
-  if (cached) return JSON.parse(cached);
-  const response = UrlFetchApp.fetch('https://www.gov.uk/bank-holidays.json', {muteHttpExceptions:true});
-  if (response.getResponseCode() !== 200) throw Error('Bank holiday calendar unavailable. Please try again.');
-  const events = JSON.parse(response.getContentText())['england-and-wales'].events;
-  const dates = events.map(event => event.date).filter(date => date.startsWith(String(year) + '-'));
-  cache.put(key, JSON.stringify(dates), 21600);
-  return dates;
+  // Calculated locally: no external-request permission required.
+  function iso(d) { return Utilities.formatDate(d, 'UTC', 'yyyy-MM-dd'); }
+  function utc(m, day) { return new Date(Date.UTC(year, m - 1, day)); }
+  function observed(d) {
+    const day = d.getUTCDay();
+    if (day === 6) d.setUTCDate(d.getUTCDate() + 2);
+    if (day === 0) d.setUTCDate(d.getUTCDate() + 1);
+    return d;
+  }
+  function firstMonday(month) {
+    const d = utc(month, 1);
+    d.setUTCDate(1 + (8 - d.getUTCDay()) % 7);
+    return d;
+  }
+  function lastMonday(month) {
+    const d = utc(month + 1, 0);
+    d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7);
+    return d;
+  }
+  // Gregorian computus for Easter Sunday.
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const easterMonth = Math.floor((h + l - 7 * m + 114) / 31);
+  const easterDay = ((h + l - 7 * m + 114) % 31) + 1;
+  const easter = utc(easterMonth, easterDay);
+  const goodFriday = new Date(easter.getTime() - 2 * 86400000);
+  const easterMonday = new Date(easter.getTime() + 86400000);
+  const christmas = observed(utc(12, 25));
+  const boxing = utc(12, 26);
+  // If Boxing Day falls on a weekend or the observed Christmas day,
+  // use the next available weekday.
+  while (boxing.getUTCDay() === 0 || boxing.getUTCDay() === 6 || iso(boxing) === iso(christmas)) {
+    boxing.setUTCDate(boxing.getUTCDate() + 1);
+  }
+  return [observed(utc(1, 1)), goodFriday, easterMonday,
+    firstMonday(5), lastMonday(5), lastMonday(8), christmas, boxing].map(iso).sort();
 }
 function annualLeaveDates(year) {
   return leaveSheet().getDataRange().getValues().slice(1)
