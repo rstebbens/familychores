@@ -161,6 +161,7 @@
       <p id="message" role="status"></p>
       <div class="week-nav"><button id="previous-week" type="button">← Previous week</button><strong id="week-label"></strong><button id="next-week" type="button">Next week →</button></div>
       <div id="tasks"></div>
+      <h2>Time off</h2><p id="leave-balance" class="note"></p>
       <h2>One-off bonus tasks</h2><p class="note">Complete a bonus task and choose cash or savings. Parent approval is required.</p><div id="bonus-tasks"></div>
     </section>
 
@@ -221,6 +222,7 @@
       clearTimeout(window.choreLoadTimer);
       el('message').textContent = '';
       monthDataCache = data;
+      el('leave-balance').textContent = data.leaveAllowance.remaining + ' of 25 annual leave days remaining for ' + data.leaveAllowance.year + ', plus bank holidays.';
       renderBonuses(data);
       var totals = data.totals;
       el('pocket').textContent = '£' + totals.pocketMoney.toFixed(2);
