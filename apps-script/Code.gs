@@ -163,7 +163,7 @@ function monthData(month, privileged) {
   const percentage = possible
     ? Math.round(10000 * points / possible) / 100
     : 0;
-  const bonus = percentage === 100 && pending === 0 ? 20 : 0;
+  const bonus = percentage >= 85 ? 20 : 0;
 
   return {
     month,
