@@ -50,6 +50,13 @@
     .task { border-top: 1px solid #ddd; padding: 15px 0; }
     .task small { display: block; color: #607783; margin: 4px 0 10px; }
     .days { display: flex; gap: 5px; flex-wrap: wrap; }
+    .week-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 18px 0; }
+    .week-nav button { background: #173d59; color: white; border: 0; border-radius: 8px; padding: 10px; cursor: pointer; }
+    .week-nav button:disabled { opacity: .35; cursor: default; }
+    .week-nav strong { font-size: 14px; }
+    .day { width: 58px; height: 54px; }
+    .day small { display: block; font-size: 10px; }
+    .day span { display: block; font-size: 17px; font-weight: bold; }
 
     .day {
       width: 38px;
@@ -152,6 +159,7 @@
       </p>
 
       <p id="message" role="status"></p>
+      <div class="week-nav"><button id="previous-week" type="button">← Previous week</button><strong id="week-label"></strong><button id="next-week" type="button">Next week →</button></div>
       <div id="tasks"></div>
     </section>
 
@@ -165,129 +173,143 @@
         Weights: dishwasher 35%, bedroom 20%, laundry 10%,
         dinner table 20%, belongings 15%.
         Pocket money is based on parent-approved completion.
-        £50 monthly savings are guaranteed; £20 bonus requires 100%
-        approved completion. Unmarked days count as incomplete
+        £50 monthly savings are guaranteed; £20 bonus unlocks at 85%
+        parent-approved completion. Unmarked days count as incomplete
         once the day has passed.
       </p>
     </section>
   </main>
 
   <script>
-    const el = id => document.getElementById(id);
-    const now = new Date();
+    var el = function (id) { return document.getElementById(id); };
+    var now = new Date();
+    var monthDataCache = null;
+    var selectedWeek = 0;
+    var weekStarts = [];
+    var weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-    el('month').value =
-      now.getFullYear() + '-' +
-      String(now.getMonth() + 1).padStart(2, '0');
+    function two(n) { return n < 10 ? '0' + n : String(n); }
+    function localToday() {
+      var d = new Date();
+      return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate());
+    }
+    el('month').value = now.getFullYear() + '-' + two(now.getMonth() + 1);
 
     function error(problem) {
       clearTimeout(window.choreLoadTimer);
-      el('message').textContent =
-        'Error: ' + (problem.message || String(problem));
+      el('message').textContent = 'Error: ' + (problem.message || String(problem));
     }
 
     function load() {
       el('message').textContent = 'Loading…';
       if (window.choreLoadTimer) clearTimeout(window.choreLoadTimer);
       window.choreLoadTimer = setTimeout(function () {
-        el('message').textContent = 'Still loading. If this persists, try opening the tracker in Safari or updating iPadOS.';
+        el('message').textContent = 'Still loading. Please check your connection and try again.';
       }, 12000);
-
-      google.script.run
-        .withSuccessHandler(render)
-        .withFailureHandler(error)
-        .apiMonth(el('month').value);
+      google.script.run.withSuccessHandler(render).withFailureHandler(error).apiMonth(el('month').value);
     }
 
-    function londonToday() {
-      return new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Europe/London',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      }).format(new Date()).split('/').reverse().join('-');
+    function findEntry(entries, date, choreId) {
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].date === date && entries[i].choreId === choreId) return entries[i];
+      }
+      return null;
     }
 
     function render(data) {
       clearTimeout(window.choreLoadTimer);
       el('message').textContent = '';
-
-      const totals = data.totals;
+      monthDataCache = data;
+      var totals = data.totals;
       el('pocket').textContent = '£' + totals.pocketMoney.toFixed(2);
       el('bonus').textContent = '£' + totals.savingsBonus;
       el('savings').textContent = '£' + totals.totalSavings;
-      el('progress').textContent =
-        totals.completionPercent.toFixed(1) + '% approved';
+      el('progress').textContent = totals.completionPercent.toFixed(1) + '% approved';
       el('fill').style.width = totals.completionPercent + '%';
-
-      el('status').textContent = totals.pendingApprovals
-        ? totals.pendingApprovals + ' chores awaiting parent sign-off'
-        : totals.savingsBonus
-          ? '🎉 Full savings bonus unlocked!'
+      el('status').textContent = totals.savingsBonus
+        ? '🎉 Savings bonus unlocked at 85%!'
+        : totals.pendingApprovals
+          ? totals.pendingApprovals + ' chores awaiting parent sign-off'
           : '';
 
-      const [year, month] = data.month.split('-').map(Number);
-      const days = new Date(year, month, 0).getDate();
-      const today = londonToday();
-      let html = '';
-
-      data.chores.forEach(chore => {
-        let buttons = '';
-
-        for (let day = 1; day <= days; day++) {
-          const date = data.month + '-' + String(day).padStart(2, '0');
-          const entry = data.entries.find(item =>
-            item.date === date && item.choreId === chore.id
-          );
-          const status = entry ? entry.status : '';
-          const future = date > today;
-
-          const className = status === 'Approved'
-            ? 'approved'
-            : status === 'Pending'
-              ? 'pending'
-              : status === 'Rejected'
-                ? 'rejected'
-                : status === 'Not Needed'
-                  ? 'na'
-                  : '';
-
-          buttons +=
-            '<button class="day ' + className + '"' +
-            ' data-date="' + date + '"' +
-            ' data-chore="' + chore.id + '"' +
-            ' title="' + date + ': ' + (status || 'unmarked') + '"' +
-            (future || entry ? ' disabled' : '') +
-            '>' + day + '</button>';
-        }
-
-        const approvedDays =
-          (buttons.match(/class="day approved"/g) || []).length;
-
-        html +=
-          '<div class="task">' +
-          '<b>' + chore.name + ' · ' + chore.weight + ' points</b>' +
-          '<small>' + approvedDays + ' approved days</small>' +
-          '<div class="days">' + buttons + '</div>' +
-          '</div>';
-      });
-
-      el('tasks').innerHTML = html;
-
-      document.querySelectorAll('button[data-chore]:not(:disabled)')
-        .forEach(button => {
-          button.onclick = () => {
-            button.disabled = true;
-            el('message').textContent = 'Saving…';
-
-            google.script.run
-              .withSuccessHandler(load)
-              .withFailureHandler(error)
-              .apiSubmit(button.dataset.date, button.dataset.chore);
-          };
-        });
+      var parts = data.month.split('-');
+      var year = Number(parts[0]), month = Number(parts[1]);
+      var lastDay = new Date(year, month, 0).getDate();
+      weekStarts = [];
+      for (var day = 1; day <= lastDay; day++) {
+        var date = new Date(year, month - 1, day);
+        if (day === 1 || date.getDay() === 1) weekStarts.push(day);
+      }
+      var today = localToday();
+      selectedWeek = 0;
+      for (var w = 0; w < weekStarts.length; w++) {
+        var first = data.month + '-' + two(weekStarts[w]);
+        if (first <= today) selectedWeek = w;
+      }
+      if (data.month > today.slice(0, 7)) selectedWeek = 0;
+      showWeek();
     }
 
+    function showWeek() {
+      if (!monthDataCache) return;
+      var data = monthDataCache;
+      var parts = data.month.split('-');
+      var year = Number(parts[0]), month = Number(parts[1]);
+      var lastDay = new Date(year, month, 0).getDate();
+      var first = weekStarts[selectedWeek];
+      var last = selectedWeek + 1 < weekStarts.length
+        ? weekStarts[selectedWeek + 1] - 1 : lastDay;
+      var today = localToday();
+      el('week-label').textContent = first + '–' + last + ' ' +
+        new Date(year, month - 1, 1).toLocaleString('en-GB', {month: 'short'});
+      el('previous-week').disabled = selectedWeek === 0;
+      el('next-week').disabled = selectedWeek === weekStarts.length - 1;
+
+      var html = '';
+      for (var c = 0; c < data.chores.length; c++) {
+        var chore = data.chores[c];
+        var buttons = '';
+        var approvedDays = 0;
+        for (var e = 0; e < data.entries.length; e++) {
+          if (data.entries[e].choreId === chore.id && data.entries[e].status === 'Approved') approvedDays++;
+        }
+        for (var day = first; day <= last; day++) {
+          var date = data.month + '-' + two(day);
+          var entry = findEntry(data.entries, date, chore.id);
+          var status = entry ? entry.status : '';
+          var className = status === 'Approved' ? 'approved' :
+            status === 'Pending' ? 'pending' :
+            status === 'Rejected' ? 'rejected' :
+            status === 'Not Needed' ? 'na' : '';
+          var weekday = weekdays[new Date(year, month - 1, day).getDay()];
+          buttons += '<button class="day ' + className + '" data-date="' + date +
+            '" data-chore="' + chore.id + '" title="' + date + ': ' +
+            (status || 'unmarked') + '"' + (date > today || entry ? ' disabled' : '') +
+            '><small>' + weekday + '</small><span>' + day + '</span></button>';
+        }
+        html += '<div class="task"><b>' + chore.name + ' · ' + chore.weight +
+          ' points</b><small>' + approvedDays + ' approved days this month</small>' +
+          '<div class="days">' + buttons + '</div></div>';
+      }
+      el('tasks').innerHTML = html;
+      var buttons = el('tasks').getElementsByTagName('button');
+      for (var i = 0; i < buttons.length; i++) {
+        if (buttons[i].disabled) continue;
+        buttons[i].onclick = function () {
+          this.disabled = true;
+          el('message').textContent = 'Saving…';
+          google.script.run.withSuccessHandler(load).withFailureHandler(error)
+            .apiSubmit(this.getAttribute('data-date'), this.getAttribute('data-chore'));
+        };
+      }
+    }
+
+    el('previous-week').onclick = function () {
+      if (selectedWeek > 0) { selectedWeek--; showWeek(); }
+    };
+    el('next-week').onclick = function () {
+      if (selectedWeek < weekStarts.length - 1) { selectedWeek++; showWeek(); }
+    };
     el('month').onchange = load;
     load();
   </script>
