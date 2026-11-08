@@ -7,7 +7,9 @@
 const SHEET_ID = '1zKPw9gjkloEmlNGhQlxpZAlA3Wy5_FA7qw8JiNNfbxk';
 const SHEETS = {
   log: 'Daily Log',
-  chores: 'Chore Settings'
+  chores: 'Chore Settings',
+  leave: 'Leave Days',
+  bonuses: 'Bonus Tasks'
 };
 const ZONE = 'Europe/London';
 
@@ -118,6 +120,86 @@ function entries() {
     }));
 }
 
+
+function optionalTab(name, headers) {
+  const book = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = book.getSheetByName(name);
+  if (!sheet) {
+    sheet = book.insertSheet(name);
+    sheet.appendRow(headers);
+  }
+  return sheet;
+}
+function leaveSheet() { return optionalTab(SHEETS.leave, ['Date', 'Child', 'Created At']); }
+function bonusSheet() { return optionalTab(SHEETS.bonuses, ['ID', 'Child', 'Task', 'Amount', 'Status', 'Destination', 'Created At', 'Submitted At', 'Reviewed At']); }
+function leaveDates(month) {
+  return leaveSheet().getDataRange().getValues().slice(1)
+    .filter(row => String(row[1]) === 'James')
+    .map(row => row[0] instanceof Date ? Utilities.formatDate(row[0], ZONE, 'yyyy-MM-dd') : String(row[0]))
+    .filter(date => date.startsWith(month));
+}
+function bonusTasks(month) {
+  return bonusSheet().getDataRange().getValues().slice(1).filter(row => row[0] && String(row[1]) === 'James')
+    .map(row => ({id:String(row[0]), name:String(row[2]), amount:Number(row[3]), status:String(row[4]), destination:String(row[5] || ''), created:String(row[6] || '')}))
+    .filter(task => task.created.slice(0, 7) === month);
+}
+function apiSetLeave(pin, date, enabled) {
+  auth(pin);
+  dateOk(date);
+  const lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    const sheet = leaveSheet();
+    const rows = sheet.getDataRange().getValues();
+    const matches = [];
+    for (let i = 1; i < rows.length; i++) {
+      const d = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], ZONE, 'yyyy-MM-dd') : String(rows[i][0]);
+      if (d === date && String(rows[i][1]) === 'James') matches.push(i + 1);
+    }
+    if (enabled && !matches.length) sheet.appendRow([date, 'James', new Date().toISOString()]);
+    if (!enabled) for (const row of matches.reverse()) sheet.deleteRow(row);
+    return {success:true};
+  } finally { lock.releaseLock(); }
+}
+function apiCreateBonus(pin, name, amount) {
+  auth(pin);
+  name = String(name || '').trim();
+  amount = Number(amount);
+  if (!name || name.length > 120 || !Number.isFinite(amount) || amount <= 0 || amount > 100) throw Error('Enter a task and an amount between £0.01 and £100.');
+  bonusSheet().appendRow([Utilities.getUuid(), 'James', name, Math.round(amount * 100) / 100, 'Open', '', new Date().toISOString(), '', '']);
+  return {success:true};
+}
+function apiSubmitBonus(id, destination) {
+  if (!['Cash','Savings'].includes(destination)) throw Error('Choose cash or savings');
+  const lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    const sheet = bonusSheet(), rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(id) && String(rows[i][1]) === 'James') {
+        if (String(rows[i][4]) !== 'Open') throw Error('Already submitted');
+        sheet.getRange(i + 1, 5, 1, 4).setValues([['Pending', destination, rows[i][6], new Date().toISOString()]]);
+        return {success:true};
+      }
+    }
+    throw Error('Bonus task not found');
+  } finally { lock.releaseLock(); }
+}
+function apiReviewBonus(pin, id, approved) {
+  auth(pin);
+  const lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    const sheet = bonusSheet(), rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(id) && String(rows[i][1]) === 'James') {
+        if (String(rows[i][4]) !== 'Pending') throw Error('Bonus is not pending');
+        sheet.getRange(i + 1, 5).setValue(approved ? 'Approved' : 'Rejected');
+        sheet.getRange(i + 1, 9).setValue(new Date().toISOString());
+        return {success:true};
+      }
+    }
+    throw Error('Bonus not found');
+  } finally { lock.releaseLock(); }
+}
+
 function monthData(month, privileged) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
     throw Error('Invalid month');
@@ -127,6 +209,8 @@ function monthData(month, privileged) {
     entry.child === 'James' && entry.date.startsWith(month)
   );
   const activeChores = chores();
+  const leave = leaveDates(month);
+  const extras = bonusTasks(month);
   const [year, monthNumber] = month.split('-').map(Number);
   const lastDay = new Date(year, monthNumber, 0).getDate();
   const currentDate = today();
@@ -146,7 +230,7 @@ function monthData(month, privileged) {
         item.date === date && item.choreId === chore.id
       );
 
-      if (entry && entry.status === 'Not Needed') continue;
+      if (leave.includes(date) || (entry && entry.status === 'Not Needed')) continue;
 
       applicable++;
       if (entry && entry.status === 'Approved') approved++;
@@ -170,6 +254,8 @@ function monthData(month, privileged) {
     month,
     child: 'James',
     chores: activeChores,
+    leaveDays: leave,
+    bonusTasks: extras,
     entries: monthlyEntries.map(entry =>
       privileged
         ? entry
@@ -182,9 +268,11 @@ function monthData(month, privileged) {
     totals: {
       completionPercent: percentage,
       pocketMoney: Math.round(percentage * 20) / 100,
+      bonusCash: extras.filter(t => t.status === 'Approved' && t.destination === 'Cash').reduce((n,t) => n + t.amount, 0),
+      bonusSavings: extras.filter(t => t.status === 'Approved' && t.destination === 'Savings').reduce((n,t) => n + t.amount, 0),
       savingsBonus: bonus,
       guaranteedSavings: 50,
-      totalSavings: 50 + bonus,
+      totalSavings: 50 + bonus + extras.filter(t => t.status === 'Approved' && t.destination === 'Savings').reduce((n,t) => n + t.amount, 0),
       pendingApprovals: pending
     }
   };
@@ -194,6 +282,7 @@ function submit(date, choreId) {
   dateOk(date);
   if (date > today()) throw Error('Future date');
 
+  if (leaveDates(date.slice(0, 7)).includes(date)) throw Error('This is an approved leave day');
   const chore = chores().find(item => item.id === choreId);
   if (!chore) throw Error('Unknown chore');
 
@@ -336,7 +425,7 @@ function apiDashboard() {
   const date = today();
   const month = date.slice(0, 7);
   const data = monthData(month, false);
-  const outstanding = data.chores.filter(chore =>
+  const outstanding = data.leaveDays.includes(date) ? [] : data.chores.filter(chore =>
     !data.entries.some(entry =>
       entry.date === date && entry.choreId === chore.id
     )
@@ -345,10 +434,14 @@ function apiDashboard() {
   return {
     completionPercent: data.totals.completionPercent,
     pocketMoney: data.totals.pocketMoney,
+    bonusCash: data.totals.bonusCash,
+    bonusSavings: data.totals.bonusSavings,
+    leaveToday: data.leaveDays.includes(date),
     pendingApprovals: data.totals.pendingApprovals,
     totalSavings: data.totals.totalSavings,
     savingsBonus: data.totals.savingsBonus,
-    outstanding: outstanding.map(chore => ({ name: chore.name }))
+    outstanding: outstanding.map(chore => ({ name: chore.name })),
+    bonusTasks: data.bonusTasks.filter(task => task.status === 'Open').map(task => ({name:task.name, amount:task.amount}))
   };
 }
 
