@@ -78,7 +78,7 @@
     <div id="pending"></div>
   </article>
 
-  <article><h2>James's leave days</h2><p>Leave does not reduce his monthly earning potential.</p><input type="date" id="leave-date"><button id="add-leave">Approve leave</button><button id="remove-leave">Remove leave</button><p id="leave-list"></p></article>
+  <article><h2>James's leave days</h2><p>Leave does not reduce his monthly earning potential.</p><input type="date" id="leave-date"><button id="add-leave">Approve leave</button><button id="remove-leave">Remove leave</button><p id="leave-balance"></p><p id="leave-list"></p></article>
   <article><h2>Create bonus task</h2><input id="bonus-name" placeholder="e.g. Wash the car" maxlength="120"><input id="bonus-amount" type="number" min="0.01" max="100" step="0.01" placeholder="£"><button id="create-bonus">Add task</button><div id="bonus-review"></div></article>
   <script>
     const el = id => document.getElementById(id);
@@ -111,6 +111,7 @@
         totals.pocketMoney.toFixed(2) + ' earned · £' +
         totals.totalSavings + ' savings';
 
+      el('leave-balance').textContent = data.leaveAllowance.remaining + ' of 25 annual leave days remaining in ' + data.leaveAllowance.year + ' (bank holidays additional)';
       el('leave-list').textContent = data.leaveDays.length ? 'Leave: ' + data.leaveDays.join(', ') : 'No leave days this month';
       const bonuses = data.bonusTasks.filter(t => t.status === 'Pending');
       const bonusArea = el('bonus-review');
