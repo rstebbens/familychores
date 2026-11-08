@@ -121,7 +121,7 @@
       <div class="stat"><div class="stat-inner">
         <small>Pocket money earned</small>
         <strong id="money">…</strong>
-        <p>Out of £20 possible</p>
+        <p>Out of £20 possible, plus approved cash bonuses</p>
       </div></div>
       <div class="stat"><div class="stat-inner">
         <small>Today's outstanding chores</small>
@@ -167,12 +167,12 @@
     function renderSummary(data) {
       el('completion').textContent = data.completionPercent.toFixed(1) + '%';
       el('fill').style.width = Math.max(0, Math.min(100, data.completionPercent)) + '%';
-      el('money').textContent = '£' + data.pocketMoney.toFixed(2);
+      el('money').textContent = '£' + (data.pocketMoney + (data.bonusCash || 0)).toFixed(2);
       el('outstanding').textContent = data.outstanding.length;
       el('pending').textContent = data.pendingApprovals;
       el('savings').textContent =
         'Savings: £' + data.totalSavings +
-        ' (£50 guaranteed + £' + data.savingsBonus + ' bonus).';
+        ' (£50 guaranteed + £' + data.savingsBonus + ' monthly bonus + £' + (data.bonusSavings || 0) + ' one-off bonuses).';
 
       const tasks = el('tasks');
       while (tasks.firstChild) tasks.removeChild(tasks.firstChild);
