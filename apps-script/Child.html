@@ -161,6 +161,7 @@
       <p id="message" role="status"></p>
       <div class="week-nav"><button id="previous-week" type="button">← Previous week</button><strong id="week-label"></strong><button id="next-week" type="button">Next week →</button></div>
       <div id="tasks"></div>
+      <h2>One-off bonus tasks</h2><p class="note">Complete a bonus task and choose cash or savings. Parent approval is required.</p><div id="bonus-tasks"></div>
     </section>
 
     <section class="panel">
@@ -175,7 +176,7 @@
         Pocket money is based on parent-approved completion.
         £50 monthly savings are guaranteed; £20 bonus unlocks at 85%
         parent-approved completion. Unmarked days count as incomplete
-        once the day has passed.
+        until approved, except on parent-approved leave days.
       </p>
     </section>
   </main>
@@ -220,6 +221,7 @@
       clearTimeout(window.choreLoadTimer);
       el('message').textContent = '';
       monthDataCache = data;
+      renderBonuses(data);
       var totals = data.totals;
       el('pocket').textContent = '£' + totals.pocketMoney.toFixed(2);
       el('bonus').textContent = '£' + totals.savingsBonus;
@@ -275,16 +277,17 @@
         }
         for (var day = first; day <= last; day++) {
           var date = data.month + '-' + two(day);
+          var onLeave = data.leaveDays.indexOf(date) !== -1;
           var entry = findEntry(data.entries, date, chore.id);
           var status = entry ? entry.status : '';
-          var className = status === 'Approved' ? 'approved' :
+          var className = onLeave ? 'na' : status === 'Approved' ? 'approved' :
             status === 'Pending' ? 'pending' :
             status === 'Rejected' ? 'rejected' :
             status === 'Not Needed' ? 'na' : '';
           var weekday = weekdays[new Date(year, month - 1, day).getDay()];
           buttons += '<button class="day ' + className + '" data-date="' + date +
             '" data-chore="' + chore.id + '" title="' + date + ': ' +
-            (status || 'unmarked') + '"' + (date > today || entry ? ' disabled' : '') +
+            (onLeave ? 'Leave' : status || 'unmarked') + '"' + (onLeave || date > today || entry ? ' disabled' : '') +
             '><small>' + weekday + '</small><span>' + day + '</span></button>';
         }
         html += '<div class="task"><b>' + chore.name + ' · ' + chore.weight +
@@ -302,6 +305,41 @@
             .apiSubmit(this.getAttribute('data-date'), this.getAttribute('data-chore'));
         };
       }
+    }
+
+    function renderBonuses(data) {
+      var area = el('bonus-tasks');
+      area.innerHTML = '';
+      for (var i = 0; i < data.bonusTasks.length; i++) {
+        (function (task) {
+          var row = document.createElement('div');
+          row.className = 'task';
+          var title = document.createElement('b');
+          title.textContent = task.name + ' · £' + task.amount.toFixed(2);
+          row.appendChild(title);
+          var info = document.createElement('small');
+          info.textContent = task.status === 'Open' ? 'Ready to complete' :
+            task.status + (task.destination ? ' · ' + task.destination : '');
+          row.appendChild(info);
+          if (task.status === 'Open') {
+            var cash = document.createElement('button'), savings = document.createElement('button');
+            cash.textContent = 'Complete → Cash';
+            savings.textContent = 'Complete → Savings';
+            cash.className = savings.className = 'back';
+            cash.style.marginRight = '8px';
+            function submitBonus(destination) {
+              cash.disabled = savings.disabled = true;
+              el('message').textContent = 'Submitting bonus…';
+              google.script.run.withSuccessHandler(load).withFailureHandler(error).apiSubmitBonus(task.id, destination);
+            }
+            cash.onclick = function () { submitBonus('Cash'); };
+            savings.onclick = function () { submitBonus('Savings'); };
+            row.appendChild(cash); row.appendChild(savings);
+          }
+          area.appendChild(row);
+        })(data.bonusTasks[i]);
+      }
+      if (!data.bonusTasks.length) area.textContent = 'No bonus tasks this month';
     }
 
     el('previous-week').onclick = function () {
