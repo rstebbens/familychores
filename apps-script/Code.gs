@@ -132,11 +132,34 @@ function optionalTab(name, headers) {
 }
 function leaveSheet() { return optionalTab(SHEETS.leave, ['Date', 'Child', 'Created At']); }
 function bonusSheet() { return optionalTab(SHEETS.bonuses, ['ID', 'Child', 'Task', 'Amount', 'Status', 'Destination', 'Created At', 'Submitted At', 'Reviewed At']); }
-function leaveDates(month) {
+function englandWalesBankHolidays(year) {
+  // Official GOV.UK bank-holiday calendar, cached to avoid repeated requests.
+  const key = 'ew-bank-holidays-' + year;
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(key);
+  if (cached) return JSON.parse(cached);
+  const response = UrlFetchApp.fetch('https://www.gov.uk/bank-holidays.json', {muteHttpExceptions:true});
+  if (response.getResponseCode() !== 200) throw Error('Bank holiday calendar unavailable. Please try again.');
+  const events = JSON.parse(response.getContentText())['england-and-wales'].events;
+  const dates = events.map(event => event.date).filter(date => date.startsWith(String(year) + '-'));
+  cache.put(key, JSON.stringify(dates), 21600);
+  return dates;
+}
+function annualLeaveDates(year) {
   return leaveSheet().getDataRange().getValues().slice(1)
     .filter(row => String(row[1]) === 'James')
     .map(row => row[0] instanceof Date ? Utilities.formatDate(row[0], ZONE, 'yyyy-MM-dd') : String(row[0]))
-    .filter(date => date.startsWith(month));
+    .filter(date => date.startsWith(String(year) + '-'));
+}
+function leaveDates(month) {
+  const year = Number(month.slice(0, 4));
+  return Array.from(new Set(annualLeaveDates(year).filter(date => date.startsWith(month))
+    .concat(englandWalesBankHolidays(year).filter(date => date.startsWith(month))))).sort();
+}
+function leaveAllowance(year) {
+  const holidays = englandWalesBankHolidays(year);
+  const used = annualLeaveDates(year).filter(date => !holidays.includes(date)).length;
+  return {year:year, allowance:25, used:used, remaining:Math.max(0,25-used), bankHolidays:holidays};
 }
 function bonusTasks(month) {
   return bonusSheet().getDataRange().getValues().slice(1).filter(row => row[0] && String(row[1]) === 'James')
@@ -148,6 +171,8 @@ function apiSetLeave(pin, date, enabled) {
   dateOk(date);
   const lock = LockService.getScriptLock(); lock.waitLock(15000);
   try {
+    const year = Number(date.slice(0, 4));
+    if (englandWalesBankHolidays(year).includes(date)) throw Error('Already a bank holiday');
     const sheet = leaveSheet();
     const rows = sheet.getDataRange().getValues();
     const matches = [];
@@ -155,7 +180,10 @@ function apiSetLeave(pin, date, enabled) {
       const d = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], ZONE, 'yyyy-MM-dd') : String(rows[i][0]);
       if (d === date && String(rows[i][1]) === 'James') matches.push(i + 1);
     }
-    if (enabled && !matches.length) sheet.appendRow([date, 'James', new Date().toISOString()]);
+    if (enabled && !matches.length) {
+      if (annualLeaveDates(year).length >= 25) throw Error('Annual leave allowance exhausted (25 days)');
+      sheet.appendRow([date, 'James', new Date().toISOString()]);
+    }
     if (!enabled) for (const row of matches.reverse()) sheet.deleteRow(row);
     return {success:true};
   } finally { lock.releaseLock(); }
@@ -255,6 +283,7 @@ function monthData(month, privileged) {
     child: 'James',
     chores: activeChores,
     leaveDays: leave,
+    leaveAllowance: leaveAllowance(year),
     bonusTasks: extras,
     entries: monthlyEntries.map(entry =>
       privileged
