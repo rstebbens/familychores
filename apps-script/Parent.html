@@ -78,6 +78,8 @@
     <div id="pending"></div>
   </article>
 
+  <article><h2>James's leave days</h2><p>Leave does not reduce his monthly earning potential.</p><input type="date" id="leave-date"><button id="add-leave">Approve leave</button><button id="remove-leave">Remove leave</button><p id="leave-list"></p></article>
+  <article><h2>Create bonus task</h2><input id="bonus-name" placeholder="e.g. Wash the car" maxlength="120"><input id="bonus-amount" type="number" min="0.01" max="100" step="0.01" placeholder="£"><button id="create-bonus">Add task</button><div id="bonus-review"></div></article>
   <script>
     const el = id => document.getElementById(id);
     const now = new Date();
@@ -109,6 +111,22 @@
         totals.pocketMoney.toFixed(2) + ' earned · £' +
         totals.totalSavings + ' savings';
 
+      el('leave-list').textContent = data.leaveDays.length ? 'Leave: ' + data.leaveDays.join(', ') : 'No leave days this month';
+      const bonuses = data.bonusTasks.filter(t => t.status === 'Pending');
+      const bonusArea = el('bonus-review');
+      bonusArea.innerHTML = '';
+      bonuses.forEach(task => {
+        const row = document.createElement('p');
+        row.textContent = task.name + ' · £' + task.amount.toFixed(2) + ' → ' + task.destination + ' ';
+        const yes = document.createElement('button');
+        yes.textContent = 'Approve';
+        yes.onclick = () => reviewBonus(task.id, true);
+        const no = document.createElement('button');
+        no.textContent = 'Reject';
+        no.onclick = () => reviewBonus(task.id, false);
+        row.appendChild(yes); row.appendChild(no); bonusArea.appendChild(row);
+      });
+      if (!bonuses.length) bonusArea.textContent = 'No bonus tasks awaiting approval';
       pending = data.entries.filter(entry => entry.status === 'Pending');
 
       if (!pending.length) {
@@ -158,6 +176,21 @@
         .apiReview(el('pin').value, decisions);
     }
 
+    function reviewBonus(id, approved) {
+      google.script.run.withSuccessHandler(load).withFailureHandler(fail).apiReviewBonus(el('pin').value, id, approved);
+    }
+    function setLeave(enabled) {
+      if (!el('leave-date').value) { el('message').textContent = 'Choose a date'; return; }
+      google.script.run.withSuccessHandler(load).withFailureHandler(fail)
+        .apiSetLeave(el('pin').value, el('leave-date').value, enabled);
+    }
+    el('add-leave').onclick = () => setLeave(true);
+    el('remove-leave').onclick = () => setLeave(false);
+    el('create-bonus').onclick = () => {
+      google.script.run.withSuccessHandler(() => {
+        el('bonus-name').value = ''; el('bonus-amount').value = ''; load();
+      }).withFailureHandler(fail).apiCreateBonus(el('pin').value, el('bonus-name').value, el('bonus-amount').value);
+    };
     el('load').onclick = load;
   </script>
 </body>
