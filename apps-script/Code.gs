@@ -141,8 +141,7 @@ function monthData(month, privileged) {
 
     for (let day = 1; day <= lastDay; day++) {
       const date = month + '-' + String(day).padStart(2, '0');
-      if (date > currentDate) continue;
-
+      // Future dates still count towards the full month's possible chores.
       const entry = monthlyEntries.find(item =>
         item.date === date && item.choreId === chore.id
       );
@@ -163,7 +162,9 @@ function monthData(month, privileged) {
   const percentage = possible
     ? Math.round(10000 * points / possible) / 100
     : 0;
-  const bonus = percentage >= 85 ? 20 : 0;
+  // Only award the monthly bonus once the entire month has finished.
+  const monthFinished = currentDate > month + '-' + String(lastDay).padStart(2, '0');
+  const bonus = monthFinished && percentage >= 85 && pending === 0 ? 20 : 0;
 
   return {
     month,
